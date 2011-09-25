@@ -60,45 +60,73 @@ void velocity_handler(mapper_signal sig, mapper_db_signal props,
 {
 }
 
+void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
+                        mapper_timetag_t *timetag, void *value)
+{
+}
+
+void channel_aftertouch_handler(mapper_signal sig, mapper_db_signal props,
+                                mapper_timetag_t *timetag, void *value)
+{
+}
+
+void pitchbend_handler(mapper_signal sig, mapper_db_signal props,
+                       mapper_timetag_t *timetag, void *value)
+{
+}
+
 void control_handler(mapper_signal sig, mapper_db_signal props,
                      mapper_timetag_t *timetag, void *value)
 {
-    
 }
 
 void add_input_signals(midimap_device dev)
 {
-    int i, min = 0, max = 127;
+    int i, min = 0, max7bit = 127, max14bit = 16383;
     float minf = 0;
     char signame[128];
     for (i = 1; i < 2; i++) {
         snprintf(signame, 128, "/channel.%i/note/pitch", i);
         mdev_add_input(dev->dev, signame, 1, 'i', "midi",
-                       &min, &max, pitch_handler, dev);
+                       &min, &max7bit, pitch_handler, dev);
         snprintf(signame, 128, "/channel.%i/note/velocity", i);
         mdev_add_input(dev->dev, signame, 1, 'i', "midi",
-                       &min, &max, velocity_handler, dev);
+                       &min, &max7bit, velocity_handler, dev);
+        //snprintf(signame, 128, "/channel.%i/note/duration", i);
+        //mdev_add_input(dev->dev, signame, 1, 'f', "midi",
+        //               &minf, 0, duration_handler, dev);
+        snprintf(signame, 128, "/channel.%i/note/aftertouch", i);
+        mdev_add_input(dev->dev, signame, 1, 'i', "midi",
+                       &min, &max7bit, aftertouch_handler, dev);
+        snprintf(signame, 128, "/channel.%i/aftertouch", i);
+        mdev_add_input(dev->dev, signame, 1, 'i', "midi",
+                       &min, &max7bit, channel_aftertouch_handler, dev);
+        snprintf(signame, 128, "/channel.%i/pitchbend", i);
+        mdev_add_input(dev->dev, signame, 1, 'i', "midi",
+                       &min, &max14bit, pitchbend_handler, dev);
     }
 }
 
 // Declare output signals
 void add_output_signals(midimap_device dev)
 {
-    int i, min = 0, max = 127;
+    int i, min = 0, max7bit = 127, max14bit = 16383;
     float minf = 0;
     char signame[128];
     // TODO: Need to declare these signals for each MIDI channel
     for (i = 1; i < 2; i++) {
         snprintf(signame, 128, "/channel.%i/note/pitch", i);
-        mdev_add_output(dev->dev, signame, 1, 'i', "midi", &min, &max);
+        mdev_add_output(dev->dev, signame, 1, 'i', "midi", &min, &max7bit);
         snprintf(signame, 128, "/channel.%i/note/velocity", i);
-        mdev_add_output(dev->dev, signame, 1, 'i', "midi", &min, &max);
+        mdev_add_output(dev->dev, signame, 1, 'i', "midi", &min, &max7bit);
         //snprintf(signame, 128, "/channel.%i/note/duration", i);
-        //mdev_add_output(dev->dev, signame, 1, 'i', "midi", &minf, 0);
+        //mdev_add_output(dev->dev, signame, 1, 'f', "midi", &minf, 0);
         snprintf(signame, 128, "/channel.%i/note/aftertouch", i);
-        mdev_add_output(dev->dev, signame, 1, 'i', "midi", &min, &max);
+        mdev_add_output(dev->dev, signame, 1, 'i', "midi", &min, &max7bit);
         snprintf(signame, 128, "/channel.%i/aftertouch", i);
-        mdev_add_output(dev->dev, signame, 1, 'i', "midi", &min, &max);
+        mdev_add_output(dev->dev, signame, 1, 'i', "midi", &min, &max7bit);
+        snprintf(signame, 128, "/channel.%i/pitchbend", i);
+        mdev_add_output(dev->dev, signame, 1, 'i', "midi", &min, &max14bit);
         
         
     }
@@ -106,20 +134,12 @@ void add_output_signals(midimap_device dev)
 
 // MIDI -> mapper
 
-// Process a poly aftertouch message
-// Process a channel pressure message
 // Process a pitch wheel message
 // Process a master volume message
 // Process a transport control message
 // Process a control change message
 // Process a MIDI time code message
 // Process a sysex message
-
-
-// mapper -> MIDI
-
-// Signal handler
-// Instance handler
 
 // Check if any MIDI ports are available on the system
 void search_midi()
