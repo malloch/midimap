@@ -222,8 +222,14 @@ void search_midi()
     }
 }
 
-void parse_midi()
+void parse_midi(midimap_device dev, PmEvent buffer)
 {
+    printf("Got message from %s: time %ld, %2lx %2lx %2lx\n",
+           mdev_name(dev->dev),
+           (long) buffer.timestamp,
+           (long) Pm_MessageStatus(buffer.message),
+           (long) Pm_MessageData1(buffer.message),
+           (long) Pm_MessageData2(buffer.message));
 }
 
 void cleanup_devices()
@@ -264,17 +270,18 @@ void loop()
         temp = outputs;
         while (temp) {
             mdev_poll(temp->dev, 0);
+            i = 0;
+            while (Pm_Poll(temp->stream) && (i++ < 10)) {
+                if (Pm_Read(temp->stream, buffer, 1) > 0) {
+                    parse_midi(temp, buffer[0]);
+                }
+            }
             temp = temp->next;
         }
         // poll libmapper inputs
         temp = inputs;
         while (temp) {
             mdev_poll(temp->dev, 0);
-            while (Pm_Poll(temp->stream) && (i++ < 10)) {
-                if (Pm_Read(temp->stream, buffer, 1)) {
-                    parse_midi(buffer[0]);
-                }
-            }
             temp = temp->next;
         }
         usleep(100 * 1000);
