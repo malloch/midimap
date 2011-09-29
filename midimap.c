@@ -41,10 +41,22 @@ void signal_handler(mapper_signal sig, mapper_db_signal props,
     }
 }
 
+void noteoff_handler(mapper_signal sig, mapper_db_signal props,
+                     mapper_timetag_t *timetag, void *value)
+{
+    // noteoff messages passed straight through with no instances
+    midimap_device dev = (midimap_device)props->user_data;
+    if (!dev)
+        return;
+    int *v = value;
+    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+                  Pm_Message(0x80, (uint8_t)v[0], (uint8_t)v[1]));    
+}
+
 void noteon_handler(mapper_signal sig, mapper_db_signal props,
                     mapper_timetag_t *timetag, void *value)
 {
-    // normal MIDI noteon messages passed straight through with no instances
+    // noteon messages passed straight through with no instances
     midimap_device dev = (midimap_device)props->user_data;
     if (!dev)
         return;
@@ -53,17 +65,62 @@ void noteon_handler(mapper_signal sig, mapper_db_signal props,
                   Pm_Message(0x90, (uint8_t)v[0], (uint8_t)v[1]));    
 }
 
-void noteoff_handler(mapper_signal sig, mapper_db_signal props,
-                    mapper_timetag_t *timetag, void *value)
+void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
+                        mapper_timetag_t *timetag, void *value)
 {
-    // normal MIDI noteoff messages passed straight through with no instances
+    //  aftertouch messages passed straight through with no instances
     midimap_device dev = (midimap_device)props->user_data;
     if (!dev)
         return;
     int *v = value;
     Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message(0x80, (uint8_t)v[0], (uint8_t)v[1]));    
+                  Pm_Message(0x80, (uint8_t)v[0], (uint8_t)v[1]));
 }
+
+void control_change_handler(mapper_signal sig, mapper_db_signal props,
+                            mapper_timetag_t *timetag, void *value)
+{
+    // control change messages passed straight through with no instances
+    midimap_device dev = (midimap_device)props->user_data;
+    if (!dev)
+        return;
+    int *v = value;
+    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+                  Pm_Message(0x80, (uint8_t)v[0], (uint8_t)v[1]));
+}
+
+void program_change_handler(mapper_signal sig, mapper_db_signal props,
+                            mapper_timetag_t *timetag, void *value)
+{
+    // program change messages passed straight through with no instances
+    return;
+}
+
+void channel_pressure_handler(mapper_signal sig, mapper_db_signal props,
+                              mapper_timetag_t *timetag, void *value)
+{
+    // channel pressure messages passed straight through with no instances
+    midimap_device dev = (midimap_device)props->user_data;
+    if (!dev)
+        return;
+    int *v = value;
+    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+                  Pm_Message(0x80, (uint8_t)v[0], (uint8_t)v[1]));
+}
+
+void pitchbend_handler(mapper_signal sig, mapper_db_signal props,
+                       mapper_timetag_t *timetag, void *value)
+{
+    // channel pressure messages passed straight through with no instances
+    midimap_device dev = (midimap_device)props->user_data;
+    if (!dev)
+        return;
+    int *v = value;
+    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+                  Pm_Message(0x80, (uint8_t)v[0], (uint8_t)v[1]));
+}
+
+
 
 void pitch_handler(mapper_signal sig, mapper_db_signal props,
                    mapper_timetag_t *timetag, void *value)
@@ -89,25 +146,7 @@ void velocity_handler(mapper_signal sig, mapper_db_signal props,
 {
 }
 
-void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
-                        mapper_timetag_t *timetag, void *value)
-{
-}
 
-void channel_aftertouch_handler(mapper_signal sig, mapper_db_signal props,
-                                mapper_timetag_t *timetag, void *value)
-{
-}
-
-void pitchbend_handler(mapper_signal sig, mapper_db_signal props,
-                       mapper_timetag_t *timetag, void *value)
-{
-}
-
-void control_handler(mapper_signal sig, mapper_db_signal props,
-                     mapper_timetag_t *timetag, void *value)
-{
-}
 
 void add_input_signals(midimap_device dev)
 {
@@ -135,7 +174,7 @@ void add_input_signals(midimap_device dev)
                        &min, &max7bit, aftertouch_handler, dev);
         snprintf(signame, 128, "/channel.%i/aftertouch", i);
         mdev_add_input(dev->dev, signame, 1, 'i', "midi",
-                       &min, &max7bit, channel_aftertouch_handler, dev);
+                       &min, &max7bit, channel_pressure_handler, dev);
         snprintf(signame, 128, "/channel.%i/pitchbend", i);
         mdev_add_input(dev->dev, signame, 1, 'i', "midi",
                        &min, &max14bit, pitchbend_handler, dev);
@@ -224,12 +263,63 @@ void search_midi()
 
 void parse_midi(midimap_device dev, PmEvent buffer)
 {
-    printf("Got message from %s: time %ld, %2lx %2lx %2lx\n",
-           mdev_name(dev->dev),
-           (long) buffer.timestamp,
-           (long) Pm_MessageStatus(buffer.message),
-           (long) Pm_MessageData1(buffer.message),
-           (long) Pm_MessageData2(buffer.message));
+    char sig_name[128];
+
+    int msg_type = (Pm_MessageStatus(buffer.message) - 0x80) / 0x0F;
+    int channel = (Pm_MessageStatus(buffer.message) - 0x80) % 0x0F;
+    int data[2] = {Pm_MessageData1(buffer.message),
+                   Pm_MessageData2(buffer.message)};
+    mapper_signal sig;
+
+    switch (msg_type) {
+        case 0:
+            // note-off message
+            snprintf(sig_name, 128, "/channel.%i/noteoff", channel);
+            sig = mdev_get_output_by_name(dev->dev, sig_name, 0);
+            if (sig)
+                msig_update(sig, data);
+            break;
+        case 1:
+            // note-on message
+            snprintf(sig_name, 128, "/channel.%i/noteon", channel);
+            sig = mdev_get_output_by_name(dev->dev, sig_name, 0);
+            if (sig)
+                msig_update(sig, data);
+            break;
+        case 2:
+            // aftertouch
+            snprintf(sig_name, 128, "/channel.%i/aftertouch", channel);
+            sig = mdev_get_output_by_name(dev->dev, sig_name, 0);
+            if (sig)
+                msig_update(sig, data);
+            break;
+        case 3:
+            // control change
+            snprintf(sig_name, 128, "/channel.%i/controlchange", channel);
+            sig = mdev_get_output_by_name(dev->dev, sig_name, 0);
+            if (sig)
+                msig_update(sig, data);
+            break;
+        case 4:
+            // program change
+            break;
+        case 5:
+            // channel pressure
+            snprintf(sig_name, 128, "/channel.%i/noteoff", channel);
+            sig = mdev_get_output_by_name(dev->dev, sig_name, 0);
+            if (sig)
+                msig_update(sig, data);
+            break;
+        case 6:
+            // pitch wheel
+            snprintf(sig_name, 128, "/channel.%i/pitchwheel", channel);
+            sig = mdev_get_output_by_name(dev->dev, sig_name, 0);
+            if (sig)
+                msig_update(sig, data);
+            break;
+        default:
+            break;
+    }
 }
 
 void cleanup_devices()
