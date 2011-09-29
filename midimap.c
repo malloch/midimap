@@ -22,6 +22,7 @@ int port = 9000;
 typedef struct _midimap_device {
     mapper_device   dev;
     PmStream        *stream;
+    int             is_linked;
     struct _midimap_device *next;
 } *midimap_device;
 
@@ -154,6 +155,7 @@ void add_input_signals(midimap_device dev)
     float minf = 0;
     char signame[128];
     for (i = 1; i < 2; i++) {
+        //mdev_add_input(dev->dev, "/midi", 1, 'm', 0, 0, 0, midi_handler, dev);
         snprintf(signame, 128, "/channel.%i/noteon", i);
         mdev_add_input(dev->dev, signame, 2, 'i', "midi",
                        &min, &max7bit, noteon_handler, dev);
@@ -189,6 +191,7 @@ void add_output_signals(midimap_device dev)
     char signame[128];
     // TODO: Need to declare these signals for each MIDI channel
     for (i = 1; i < 2; i++) {
+        //mdev_add_output(dev->dev, "/midi", 1, 'm', 0, 0, 0);
         snprintf(signame, 128, "/channel.%i/noteon", i);
         mdev_add_output(dev->dev, signame, 2, 'i', "midi", &min, &max7bit);
         snprintf(signame, 128, "/channel.%i/noteoff", i);
