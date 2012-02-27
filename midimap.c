@@ -20,6 +20,7 @@ int done = 0;
 int port = 9000;
 
 typedef struct _midimap_device {
+    char            *name;
     mapper_device   dev;
     PmStream        *stream;
     int             is_linked;
@@ -267,11 +268,12 @@ void add_output_signals(midimap_device dev)
 // Check if any MIDI ports are available on the system
 void search_midi()
 {
+    printf("Searching for MIDI devices...\n");
     PmEvent buffer[1];
     int i;
     char devname[128], *position;
     if (Pm_CountDevices() == 0) {
-        printf("No MIDI devices found!\n");
+        printf("- none found.\n");
         return;
     }
     for (i = 0; i < Pm_CountDevices(); i++) {
@@ -280,10 +282,20 @@ void search_midi()
         while (position = strchr(devname, ' ')) {
             *position = '_';
         }
-        midimap_device dev = (midimap_device) calloc(1, sizeof(struct _midimap_device));
-        dev->dev = mdev_new(devname, port, 0);
         if (info->input) {
-            printf("Got MIDI input %d %s %s...", i, info->interf, info->name);
+            midimap_device temp = outputs;
+            while (temp) {
+                if (strcmp(temp->name, devname) == 0) {
+                    break;
+                }
+                temp = temp->next;
+            }
+            if (temp)
+                continue;
+            // new device discovered
+            midimap_device dev = (midimap_device) calloc(1, sizeof(struct _midimap_device));
+            dev->name = strdup(devname);
+            dev->dev = mdev_new(devname, port, 0);
             // TODO: Should only open input if it is mapped
             Pm_OpenInput(&dev->stream, i, DRIVER_INFO, INPUT_BUFFER_SIZE, TIME_PROC, TIME_INFO);
             Pm_SetFilter(dev->stream, PM_FILT_ACTIVE | PM_FILT_CLOCK | PM_FILT_SYSEX);
@@ -295,17 +307,27 @@ void search_midi()
             dev->next = outputs;
             outputs = dev;
             add_output_signals(dev);
-            printf("added.\n");
         }
         if (info->output) {
-            printf("Got MIDI output %d %s %s...", i, info->interf, info->name);
+            midimap_device temp = inputs;
+            while (temp) {
+                if (strcmp(temp->name, devname) == 0)
+                    break;
+                temp = temp->next;
+            }
+            if (temp)
+                continue;
+            // new device discovered
+            midimap_device dev = (midimap_device) calloc(1, sizeof(struct _midimap_device));
+            dev->name = strdup(devname);
+            dev->dev = mdev_new(devname, port, 0);
             // TODO: Should only open output if it is mapped
             Pm_OpenOutput(&dev->stream, i, DRIVER_INFO, OUTPUT_BUFFER_SIZE, TIME_PROC, TIME_INFO, latency);
             dev->next = inputs;
             inputs = dev;
             add_input_signals(dev);
-            printf("added.\n");
         }
+        printf("    Added %s>%s\n", info->interf, info->name);
     }
 }
 
@@ -315,9 +337,6 @@ void parse_midi(midimap_device dev, PmEvent buffer)
     int channel = (Pm_MessageStatus(buffer.message) - 0x80) % 0x0F;
     int data[2] = {Pm_MessageData1(buffer.message),
                    Pm_MessageData2(buffer.message)};
-
-    /* TODO: add array of signal pointers to device, use array index instead
-     * of mdev_get_output_by_name()  */
 
     switch (msg_type) {
         case 0:
@@ -356,6 +375,9 @@ void parse_midi(midimap_device dev, PmEvent buffer)
 
 void cleanup_device(midimap_device dev)
 {
+    if (dev->name) {
+        free(dev->name);
+    }
     if (dev->dev) {
         mdev_free(dev->dev);
     }
@@ -383,6 +405,7 @@ void cleanup_all_devices()
 
 void loop()
 {
+    int counter = 0;
     midimap_device temp;
     PmEvent buffer[1];
     search_midi();
@@ -408,6 +431,10 @@ void loop()
             temp = temp->next;
         }
         usleep(10 * 1000);
+        if (counter++ > 500) {
+            search_midi();
+            counter = 0;
+        }
     }
 }
 
