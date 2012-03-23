@@ -1,12 +1,8 @@
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include "midimap.h"
+#include <iostream>
+#include <cstdlib>
 #include "RtMidi.h"
-
-#include <unistd.h>
-#include <signal.h>
+#include "mapper/mapper.h"
 
 int done = 0;
 int port = 9000;
@@ -29,7 +25,7 @@ void signal_handler(mapper_signal sig, mapper_db_signal props,
 {
     if (value) {
         printf("--> destination got %s", props->name);
-        float *v = value;
+        float *v = (float *)value;
         for (int i = 0; i < props->length; i++) {
             printf(" %f", v[i]);
         }
@@ -54,10 +50,10 @@ void noteoff_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    int *v = value;
-    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+    //int *v = (int *)value;
+    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
                   Pm_Message((uint8_t)(channel_num + 0x80),
-                             (uint8_t)v[0], (uint8_t)v[1]));    
+                             (uint8_t)v[0], (uint8_t)v[1]));*/
 }
 
 void noteon_handler(mapper_signal sig, mapper_db_signal props,
@@ -77,10 +73,10 @@ void noteon_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    int *v = value;
-    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+    //int *v = (int *)value;
+    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
                   Pm_Message((uint8_t)(channel_num + 0x90),
-                             (uint8_t)v[0], (uint8_t)v[1]));    
+                             (uint8_t)v[0], (uint8_t)v[1]));*/
 }
 
 void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
@@ -100,10 +96,10 @@ void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    int *v = value;
-    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+    //int *v = (int *)value;
+    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
                   Pm_Message((uint8_t)(channel_num + 0xA0),
-                             (uint8_t)v[0], (uint8_t)v[1]));
+                             (uint8_t)v[0], (uint8_t)v[1]));*/
 }
 
 void control_change_handler(mapper_signal sig, mapper_db_signal props,
@@ -123,10 +119,10 @@ void control_change_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    int *v = value;
-    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+    //int *v = (int *)value;
+    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
                   Pm_Message((uint8_t)(channel_num + 0xB0),
-                             (uint8_t)v[0], (uint8_t)v[1]));
+                             (uint8_t)v[0], (uint8_t)v[1]));*/
 }
 
 void program_change_handler(mapper_signal sig, mapper_db_signal props,
@@ -146,10 +142,10 @@ void program_change_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    int *v = value;
-    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+    //int *v = (int *)value;
+    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
                   Pm_Message((uint8_t)(channel_num + 0xC0),
-                             (uint8_t)v[0], (uint8_t)v[1]));
+                             (uint8_t)v[0], (uint8_t)v[1]));*/
 }
 
 void channel_pressure_handler(mapper_signal sig, mapper_db_signal props,
@@ -169,10 +165,10 @@ void channel_pressure_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    int *v = value;
-    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+    //int *v = (int *)value;
+    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
                   Pm_Message((uint8_t)(channel_num + 0xD0),
-                             (uint8_t)v[0], (uint8_t)v[1]));
+                             (uint8_t)v[0], (uint8_t)v[1]));*/
 }
 
 void pitch_wheel_handler(mapper_signal sig, mapper_db_signal props,
@@ -192,10 +188,10 @@ void pitch_wheel_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    int *v = value;
-    Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
+    //int *v = (int *)value;
+    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
                   Pm_Message((uint8_t)(channel_num + 0xE0),
-                             (uint8_t)v[0], (uint8_t)v[0] >> 8));
+                             (uint8_t)v[0], (uint8_t)v[0] >> 8));*/
 }
 
 void add_input_signals(midimap_device dev)
@@ -262,8 +258,8 @@ void add_output_signals(midimap_device dev)
 void scan_midi_devices()
 {
     printf("Searching for MIDI devices...\n");
-    int i;
-    char devname[128], *position;
+    //int i;
+    //char devname[128], *position;
 
     RtMidiIn *midiin = 0;
     RtMidiOut *midiout = 0;
@@ -296,7 +292,7 @@ void scan_midi_devices()
     delete midiin;
     delete midiout;
 
-    return
+    return;
 
     /*
     // check for new devices
@@ -323,9 +319,7 @@ void scan_midi_devices()
             // TODO: Should only open input if it is mapped
             Pm_OpenInput(&dev->stream, i, DRIVER_INFO, INPUT_BUFFER_SIZE, TIME_PROC, TIME_INFO);
             Pm_SetFilter(dev->stream, PM_FILT_ACTIVE | PM_FILT_CLOCK | PM_FILT_SYSEX);
-            /* empty the buffer after setting filter, just in case anything
-             got through */
-      /*      while (Pm_Poll(dev->stream)) {
+            while (Pm_Poll(dev->stream)) {
                 Pm_Read(dev->stream, buffer, 1);
             }
             dev->next = outputs;
@@ -375,42 +369,41 @@ void scan_midi_devices()
     }*/
 }
 
-void parse_midi(midimap_device dev, PmEvent buffer)
+void parse_midi(midimap_device dev, uint8_t *message)
 {
-    int msg_type = (Pm_MessageStatus(buffer.message) - 0x80) / 0x0F;
-    int channel = (Pm_MessageStatus(buffer.message) - 0x80) % 0x0F;
-    int data[2] = {Pm_MessageData1(buffer.message),
-                   Pm_MessageData2(buffer.message)};
+    int msg_type = (message[0] - 0x80) / 0x0F;
+    int channel = (message[0] - 0x80) % 0x0F;
+    int data[2] = {message[1], message[2]};
 
     switch (msg_type) {
         case 0:
             // note-off message
-            msig_update(dev->signals[0][channel], data);
+            msig_update(dev->signals[0][channel], (void *)data);
             break;
         case 1:
             // note-on message
-            msig_update(dev->signals[1][channel], data);
+            msig_update(dev->signals[1][channel], (void *)data);
             break;
         case 2:
             // aftertouch
-            msig_update(dev->signals[2][channel], data);
+            msig_update(dev->signals[2][channel], (void *)data);
             break;
         case 3:
             // control change
-            msig_update(dev->signals[3][channel], data);
+            msig_update(dev->signals[3][channel], (void *)data);
             break;
         case 4:
             // program change
-            msig_update(dev->signals[4][channel], data);
+            msig_update(dev->signals[4][channel], (void *)data);
             break;
         case 5:
             // channel pressure
-            msig_update(dev->signals[5][channel], data);
+            msig_update(dev->signals[5][channel], (void *)data);
             break;
         case 6:
             // pitch wheel
             data[1] = data[1] + (data[2] << 8);
-            msig_update(dev->signals[6][channel], data);
+            msig_update(dev->signals[6][channel], (void *)data);
             break;
         default:
             break;
@@ -481,8 +474,7 @@ int main ()
     signal(SIGINT, ctrlc);
 
     loop();
-    
-done:
+
     cleanup_all_devices();
     return 0;
 }
