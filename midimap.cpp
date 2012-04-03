@@ -20,6 +20,8 @@ typedef struct _midimap_device {
 struct _midimap_device *inputs = 0;
 struct _midimap_device *outputs = 0;
 
+std::vector<unsigned char> outmess (3,0);
+
 void cleanup_device(midimap_device dev);
 
 void signal_handler(mapper_signal sig, mapper_db_signal props,
@@ -42,6 +44,8 @@ void noteoff_handler(mapper_signal sig, mapper_db_signal props,
     midimap_device dev = (midimap_device)props->user_data;
     if (!dev)
         return;
+    if (!dev->midiout)
+        return;
     char channel[4] = {0, 0, 0, 0};
     int channel_num = 0;
     if (props->name[8] != '.')
@@ -52,10 +56,12 @@ void noteoff_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0x80),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0x80;
+    outmess[1] = v[0];
+    outmess[2] = v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void noteon_handler(mapper_signal sig, mapper_db_signal props,
@@ -65,6 +71,8 @@ void noteon_handler(mapper_signal sig, mapper_db_signal props,
     midimap_device dev = (midimap_device)props->user_data;
     if (!dev)
         return;
+    if (!dev->midiout)
+        return;
     char channel[4] = {0, 0, 0, 0};
     int channel_num = 0;
     if (props->name[8] != '.')
@@ -75,10 +83,12 @@ void noteon_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0x90),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = (unsigned char)channel_num + 0x90;
+    outmess[1] = (unsigned char)v[0];
+    outmess[2] = (unsigned char)v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
@@ -98,10 +108,12 @@ void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0xA0),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0xA0;
+    outmess[1] = v[0];
+    outmess[2] = v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void control_change_handler(mapper_signal sig, mapper_db_signal props,
@@ -121,10 +133,12 @@ void control_change_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0xB0),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0xB0;
+    outmess[1] = v[0];
+    outmess[2] = v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void program_change_handler(mapper_signal sig, mapper_db_signal props,
@@ -144,10 +158,12 @@ void program_change_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0xC0),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0xC0;
+    outmess[1] = v[0];
+    outmess[2] = v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void channel_pressure_handler(mapper_signal sig, mapper_db_signal props,
@@ -167,10 +183,12 @@ void channel_pressure_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0xD0),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0xD0;
+    outmess[1] = v[0];
+    outmess[2] = v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void pitch_wheel_handler(mapper_signal sig, mapper_db_signal props,
@@ -190,10 +208,12 @@ void pitch_wheel_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0xE0),
-                             (uint8_t)v[0], (uint8_t)v[0] >> 8));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0xE0;
+    outmess[1] = v[0];
+    outmess[2] = v[0] >> 8;
+    dev->midiout->sendMessage(&outmess);
 }
 
 void add_input_signals(midimap_device dev)
@@ -378,11 +398,11 @@ void scan_midi_devices()
     }*/
 }
 
-void parse_midi(midimap_device dev, uint8_t *message)
+void parse_midi(midimap_device dev, std::vector<unsigned char> message)
 {
-    int msg_type = (message[0] - 0x80) / 0x0F;
-    int channel = (message[0] - 0x80) % 0x0F;
-    int data[2] = {message[1], message[2]};
+    int msg_type = ((int)message[0] - 0x80) / 0x0F;
+    int channel = ((int)message[0] - 0x80) % 0x0F;
+    int data[2] = {(int)message[1], (int)message[2]};
 
     switch (msg_type) {
         case 0:
@@ -466,12 +486,13 @@ void loop()
         temp = outputs;
         while (temp) {
             mdev_poll(temp->mapper_dev, 0);
-            stamp = temp->midiin->getMessage(&message);
-            nBytes = message.size();
-            for ( i=0; i<nBytes; i++ )
-                std::cout << temp->name << "Byte " << i << " = " << (int)message[i] << ", ";
-            if ( nBytes > 0 )
-                std::cout << "stamp = " << stamp << std::endl;
+            if (mdev_ready(temp->mapper_dev)) {
+                stamp = temp->midiin->getMessage(&message);
+                nBytes = message.size();
+                // TODO: use timestamp
+                if (nBytes > 2)
+                    parse_midi(temp, message);
+            }
             temp = temp->next;
         }
         // poll libmapper inputs
