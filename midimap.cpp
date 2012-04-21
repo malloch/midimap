@@ -9,7 +9,9 @@ int port = 9000;
 
 typedef struct _midimap_device {
     char            *name;
-    mapper_device   dev;
+    mapper_device   mapper_dev;
+    RtMidiIn        *midiin;
+    RtMidiOut       *midiout;
     int             is_linked;
     mapper_signal   signals[8][16];
     struct _midimap_device *next;
@@ -17,6 +19,8 @@ typedef struct _midimap_device {
 
 struct _midimap_device *inputs = 0;
 struct _midimap_device *outputs = 0;
+
+std::vector<unsigned char> outmess (3,0);
 
 void cleanup_device(midimap_device dev);
 
@@ -40,6 +44,8 @@ void noteoff_handler(mapper_signal sig, mapper_db_signal props,
     midimap_device dev = (midimap_device)props->user_data;
     if (!dev)
         return;
+    if (!dev->midiout)
+        return;
     char channel[4] = {0, 0, 0, 0};
     int channel_num = 0;
     if (props->name[8] != '.')
@@ -50,10 +56,12 @@ void noteoff_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0x80),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0x80;
+    outmess[1] = v[0];
+    outmess[2] = v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void noteon_handler(mapper_signal sig, mapper_db_signal props,
@@ -63,6 +71,8 @@ void noteon_handler(mapper_signal sig, mapper_db_signal props,
     midimap_device dev = (midimap_device)props->user_data;
     if (!dev)
         return;
+    if (!dev->midiout)
+        return;
     char channel[4] = {0, 0, 0, 0};
     int channel_num = 0;
     if (props->name[8] != '.')
@@ -73,10 +83,12 @@ void noteon_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0x90),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = (unsigned char)channel_num + 0x90;
+    outmess[1] = (unsigned char)v[0];
+    outmess[2] = (unsigned char)v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
@@ -96,10 +108,12 @@ void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0xA0),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0xA0;
+    outmess[1] = v[0];
+    outmess[2] = v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void control_change_handler(mapper_signal sig, mapper_db_signal props,
@@ -119,10 +133,12 @@ void control_change_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0xB0),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0xB0;
+    outmess[1] = v[0];
+    outmess[2] = v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void program_change_handler(mapper_signal sig, mapper_db_signal props,
@@ -142,10 +158,12 @@ void program_change_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0xC0),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0xC0;
+    outmess[1] = v[0];
+    outmess[2] = v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void channel_pressure_handler(mapper_signal sig, mapper_db_signal props,
@@ -165,10 +183,12 @@ void channel_pressure_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0xD0),
-                             (uint8_t)v[0], (uint8_t)v[1]));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0xD0;
+    outmess[1] = v[0];
+    outmess[2] = v[1];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void pitch_wheel_handler(mapper_signal sig, mapper_db_signal props,
@@ -188,10 +208,12 @@ void pitch_wheel_handler(mapper_signal sig, mapper_db_signal props,
     channel_num = atoi(channel);
     if (channel_num < 1 || channel_num > 16)
         return;
-    //int *v = (int *)value;
-    /*Pm_WriteShort(dev->stream, TIME_PROC(TIME_INFO),
-                  Pm_Message((uint8_t)(channel_num + 0xE0),
-                             (uint8_t)v[0], (uint8_t)v[0] >> 8));*/
+    int *v = (int *)value;
+
+    outmess[0] = channel_num + 0xE0;
+    outmess[1] = v[0];
+    outmess[2] = v[0] >> 8;
+    dev->midiout->sendMessage(&outmess);
 }
 
 void add_input_signals(midimap_device dev)
@@ -200,25 +222,25 @@ void add_input_signals(midimap_device dev)
     int i, min = 0, max7bit = 127, max14bit = 16383;
     for (i = 1; i < 17; i++) {
         snprintf(signame, 64, "/channel.%i/noteoff", i);
-        dev->signals[0][i] = mdev_add_input(dev->dev, signame, 2, 'i', "midi",
+        dev->signals[0][i] = mdev_add_input(dev->mapper_dev, signame, 2, 'i', "midi",
                                             &min, &max7bit, noteoff_handler, dev);
         snprintf(signame, 64, "/channel.%i/noteon", i);
-        dev->signals[1][i] = mdev_add_input(dev->dev, signame, 2, 'i', "midi",
+        dev->signals[1][i] = mdev_add_input(dev->mapper_dev, signame, 2, 'i', "midi",
                                             &min, &max7bit, noteon_handler, dev);
         snprintf(signame, 64, "/channel.%i/aftertouch", i);
-        dev->signals[2][i] = mdev_add_input(dev->dev, signame, 2, 'i', "midi",
+        dev->signals[2][i] = mdev_add_input(dev->mapper_dev, signame, 2, 'i', "midi",
                                             &min, &max7bit, aftertouch_handler, dev);
         snprintf(signame, 64, "/channel.%i/control_change", i);
-        dev->signals[3][i] = mdev_add_input(dev->dev, signame, 2, 'i', "midi",
+        dev->signals[3][i] = mdev_add_input(dev->mapper_dev, signame, 2, 'i', "midi",
                                             &min, &max7bit, control_change_handler, dev);
         snprintf(signame, 64, "/channel.%i/program_change", i);
-        dev->signals[4][i] = mdev_add_input(dev->dev, signame, 2, 'i', "midi",
+        dev->signals[4][i] = mdev_add_input(dev->mapper_dev, signame, 2, 'i', "midi",
                                             &min, &max7bit, program_change_handler, dev);
         snprintf(signame, 64, "/channel.%i/channel_pressure", i);
-        dev->signals[5][i] = mdev_add_input(dev->dev, signame, 2, 'i', "midi",
+        dev->signals[5][i] = mdev_add_input(dev->mapper_dev, signame, 2, 'i', "midi",
                                             &min, &max7bit, channel_pressure_handler, dev);
         snprintf(signame, 64, "/channel.%i/pitch_wheel", i);
-        dev->signals[6][i] = mdev_add_input(dev->dev, signame, 1, 'i', "midi",
+        dev->signals[6][i] = mdev_add_input(dev->mapper_dev, signame, 1, 'i', "midi",
                                             &min, &max14bit, pitch_wheel_handler, dev);
     }
 }
@@ -231,25 +253,25 @@ void add_output_signals(midimap_device dev)
     // TODO: Need to declare these signals for each MIDI channel
     for (i = 1; i < 17; i++) {
         snprintf(signame, 64, "/channel.%i/noteoff", i);
-        dev->signals[0][i] = mdev_add_output(dev->dev, signame, 2,
+        dev->signals[0][i] = mdev_add_output(dev->mapper_dev, signame, 2,
                                              'i', "midi", &min, &max7bit);
         snprintf(signame, 64, "/channel.%i/noteon", i);
-        dev->signals[1][i] = mdev_add_output(dev->dev, signame, 2,
+        dev->signals[1][i] = mdev_add_output(dev->mapper_dev, signame, 2,
                                              'i', "midi", &min, &max7bit);
         snprintf(signame, 64, "/channel.%i/aftertouch", i);
-        dev->signals[2][i] = mdev_add_output(dev->dev, signame, 2,
+        dev->signals[2][i] = mdev_add_output(dev->mapper_dev, signame, 2,
                                              'i', "midi", &min, &max7bit);
         snprintf(signame, 64, "/channel.%i/control_change", i);
-        dev->signals[3][i] = mdev_add_output(dev->dev, signame, 2,
+        dev->signals[3][i] = mdev_add_output(dev->mapper_dev, signame, 2,
                                              'i', "midi", &min, &max7bit);
         snprintf(signame, 64, "/channel.%i/program_change", i);
-        dev->signals[4][i] = mdev_add_output(dev->dev, signame, 2,
+        dev->signals[4][i] = mdev_add_output(dev->mapper_dev, signame, 2,
                                              'i', "midi", &min, &max7bit);
         snprintf(signame, 64, "/channel.%i/channel_pressure", i);
-        dev->signals[5][i] = mdev_add_output(dev->dev, signame, 2,
+        dev->signals[5][i] = mdev_add_output(dev->mapper_dev, signame, 2,
                                              'i', "midi", &min, &max7bit);
         snprintf(signame, 64, "/channel.%i/pitch_wheel", i);
-        dev->signals[6][i] = mdev_add_output(dev->dev, signame, 1,
+        dev->signals[6][i] = mdev_add_output(dev->mapper_dev, signame, 1,
                                              'i', "midi", &min, &max14bit);
     }
 }
@@ -258,8 +280,7 @@ void add_output_signals(midimap_device dev)
 void scan_midi_devices()
 {
     printf("Searching for MIDI devices...\n");
-    //int i;
-    //char devname[128], *position;
+    char devname[128];
 
     RtMidiIn *midiin = 0;
     RtMidiOut *midiout = 0;
@@ -267,45 +288,15 @@ void scan_midi_devices()
     try {
         midiin = new RtMidiIn();
         unsigned int nPorts = midiin->getPortCount();
-        std::cout << "\nThere are " << nPorts << " MIDI input sources available.\n";
+        std::cout << "There are " << nPorts << " MIDI input sources available.\n";
 
         for (unsigned int i=0; i<nPorts; i++) {
             std::string portName = midiin->getPortName(i);
             std::cout << "  Input Port #" << i+1 << ": " << portName << '\n';
-        }
-
-        midiout = new RtMidiOut();
-        nPorts = midiout->getPortCount();
-        std::cout << "\nThere are " << nPorts << " MIDI output ports available.\n";
-
-        for (unsigned int i=0; i<nPorts; i++) {
-            std::string portName = midiin->getPortName(i);
-            std::cout << "  Output Port #" << i+1 << ": " << portName << '\n';
-        }
-
-        std::cout << std::endl;
-    }
-    catch (RtError &error) {
-        error.printMessage();
-    }
-
-    delete midiin;
-    delete midiout;
-
-    return;
-
-    /*
-    // check for new devices
-    for (i = 0; i < Pm_CountDevices(); i++) {
-        const PmDeviceInfo *info = Pm_GetDeviceInfo(i);
-        snprintf(devname, 128, "%s", info->name);
-        while (position = strchr(devname, ' ')) {
-            *position = '_';
-        }
-        if (info->input) {
+            // check if record already exists
             midimap_device temp = outputs;
             while (temp) {
-                if (strcmp(temp->name, info->name) == 0) {
+                if (portName.compare(temp->name) == 0) {
                     break;
                 }
                 temp = temp->next;
@@ -314,39 +305,77 @@ void scan_midi_devices()
                 continue;
             // new device discovered
             midimap_device dev = (midimap_device) calloc(1, sizeof(struct _midimap_device));
-            dev->name = strdup(info->name);
-            dev->dev = mdev_new(devname, port, 0);
-            // TODO: Should only open input if it is mapped
-            Pm_OpenInput(&dev->stream, i, DRIVER_INFO, INPUT_BUFFER_SIZE, TIME_PROC, TIME_INFO);
-            Pm_SetFilter(dev->stream, PM_FILT_ACTIVE | PM_FILT_CLOCK | PM_FILT_SYSEX);
-            while (Pm_Poll(dev->stream)) {
-                Pm_Read(dev->stream, buffer, 1);
+            dev->name = strdup(portName.c_str());
+            // remove illegal characters in device name
+            unsigned int len = strlen(dev->name), k = 0;
+            for (unsigned int j=0; j<len; j++) {
+                if (isalnum(dev->name[j])) {
+                    devname[k++] = dev->name[j];
+                    devname[k] = 0;
+                }   
             }
+            dev->mapper_dev = mdev_new(devname, port, 0);
+            dev->midiin = new RtMidiIn();
+            dev->midiin->openPort(i);
+            dev->midiin->ignoreTypes(true, true, true);
             dev->next = outputs;
             outputs = dev;
             add_output_signals(dev);
         }
-        if (info->output) {
+    }
+    catch (RtError &error) {
+        error.printMessage();
+    }
+
+    delete midiin;
+
+    try {
+        midiout = new RtMidiOut();
+        unsigned int nPorts = midiout->getPortCount();
+        std::cout << "There are " << nPorts << " MIDI output ports available.\n";
+
+        for (unsigned int i=0; i<nPorts; i++) {
+            std::string portName = midiout->getPortName(i);
+            std::cout << "  Output Port #" << i+1 << ": " << portName << '\n';
+            // check if record already exists
             midimap_device temp = inputs;
             while (temp) {
-                if (strcmp(temp->name, info->name) == 0)
+                if (portName.compare(temp->name) == 0) {
                     break;
+                }
                 temp = temp->next;
             }
             if (temp)
                 continue;
             // new device discovered
             midimap_device dev = (midimap_device) calloc(1, sizeof(struct _midimap_device));
-            dev->name = strdup(info->name);
-            dev->dev = mdev_new(devname, port, 0);
-            // TODO: Should only open output if it is mapped
-            Pm_OpenOutput(&dev->stream, i, DRIVER_INFO, OUTPUT_BUFFER_SIZE, TIME_PROC, TIME_INFO, latency);
+            dev->name = strdup(portName.c_str());
+            // remove illegal characters in device name
+            unsigned int len = strlen(dev->name), k = 0;
+            for (unsigned int j=0; j<len; j++) {
+                if (isalnum(dev->name[j])) {
+                    devname[k++] = dev->name[j];
+                    devname[k] = 0;
+                }   
+            }
+            dev->mapper_dev = mdev_new(devname, port, 0);
+            dev->midiin = 0;
+            dev->midiout = new RtMidiOut();
+            dev->midiout->openPort(i);
             dev->next = inputs;
             inputs = dev;
             add_input_signals(dev);
         }
-        printf("    Added %s>%s\n", info->interf, info->name);
     }
+    catch (RtError &error) {
+        error.printMessage();
+    }
+
+    delete midiout;
+
+    return;
+
+    /*
     // check for dropped devices
     midimap_device *temp = &outputs;
     midimap_device found = 0;
@@ -369,11 +398,11 @@ void scan_midi_devices()
     }*/
 }
 
-void parse_midi(midimap_device dev, uint8_t *message)
+void parse_midi(midimap_device dev, std::vector<unsigned char> message)
 {
-    int msg_type = (message[0] - 0x80) / 0x0F;
-    int channel = (message[0] - 0x80) % 0x0F;
-    int data[2] = {message[1], message[2]};
+    int msg_type = ((int)message[0] - 0x80) / 0x0F;
+    int channel = ((int)message[0] - 0x80) % 0x0F;
+    int data[2] = {(int)message[1], (int)message[2]};
 
     switch (msg_type) {
         case 0:
@@ -415,8 +444,14 @@ void cleanup_device(midimap_device dev)
     if (dev->name) {
         free(dev->name);
     }
-    if (dev->dev) {
-        mdev_free(dev->dev);
+    if (dev->mapper_dev) {
+        mdev_free(dev->mapper_dev);
+    }
+    if (dev->midiin) {
+        delete dev->midiin;
+    }
+    if (dev->midiout) {
+        delete dev->midiout;
     }
 }
 
@@ -438,29 +473,39 @@ void cleanup_all_devices()
 
 void loop()
 {
-    int counter = 0;
+    std::vector<unsigned char> message;
+    int nBytes, i;
+    double stamp;
+    //int counter = 0;
     midimap_device temp;
+
     scan_midi_devices();
-    int i;
+
     while (!done) {
         // poll libmapper outputs
         temp = outputs;
         while (temp) {
-            mdev_poll(temp->dev, 0);
-            i = 0;
+            mdev_poll(temp->mapper_dev, 0);
+            if (mdev_ready(temp->mapper_dev)) {
+                stamp = temp->midiin->getMessage(&message);
+                nBytes = message.size();
+                // TODO: use timestamp
+                if (nBytes > 2)
+                    parse_midi(temp, message);
+            }
             temp = temp->next;
         }
         // poll libmapper inputs
         temp = inputs;
         while (temp) {
-            mdev_poll(temp->dev, 0);
+            mdev_poll(temp->mapper_dev, 0);
             temp = temp->next;
         }
         usleep(10 * 1000);
-        if (counter++ > 500) {
-            scan_midi_devices();
-            counter = 0;
-        }
+        //if (counter++ > 500) {
+        //    scan_midi_devices();
+        //    counter = 0;
+        //}
     }
 }
 
