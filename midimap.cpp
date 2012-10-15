@@ -16,6 +16,7 @@
 
 int done = 0;
 int port = 9000;
+mapper_timetag_t tt;
 
 typedef struct _midimap_device {
     char            *name;
@@ -34,11 +35,26 @@ std::vector<unsigned char> outmess (3, 0);
 
 void cleanup_device(midimap_device dev);
 
+int get_channel_from_signame(const char *name)
+{
+    char channel_str[4] = {0, 0, 0, 0};
+    int channel = 0;
+    if (name[8] != '.')
+        return -1;
+    strncpy(channel_str, &name[9], 3);
+    channel_str[strchr(channel_str, '/') - channel_str] = 0;
+    channel = atoi(channel_str) - 1;
+    if (channel < 1 || channel > 16)
+        return -1;
+    return channel;
+}
+
 void pitch_handler(mapper_signal sig,
-                   int instance_id,
                    mapper_db_signal props,
-                   mapper_timetag_t *timetag,
-                   void *value)
+                   int instance_id,
+                   void *value,
+                   int count,
+                   mapper_timetag_t *timetag)
 {
     // noteoff messages passed straight through with no instances
     midimap_device dev = (midimap_device)props->user_data;
@@ -47,49 +63,43 @@ void pitch_handler(mapper_signal sig,
     if (!dev->midiout)
         return;
 
-    // extract channel number from signal name
-    char channel_str[4] = {0, 0, 0, 0};
-    int channel = 0;
-    if (props->name[8] != '.')
-        return;
-    strncpy(channel_str, &props->name[9], 3);
-    channel_str[strchr(channel_str, '/') - channel_str] = 0;
-    channel = atoi(channel_str) - 1;
-    if (channel < 0 || channel > 15)
-        return;
-
-    if (!value) {
-        // send MIDI noteoff - need instance note info
-        unsigned char note = (long int)msig_instance_get_data(sig, instance_id);
-        if (!note)
-            return;
-        outmess[0] = channel + NOTE_ON;
-        outmess[1] = note;
-        outmess[2] = 0;
-        dev->midiout->sendMessage(&outmess);
-        return;
-    }
+    int channel = get_channel_from_signame(props->name);
 
     int *v = (int *)value;
-    msig_instance_set_data(sig, instance_id, (void *)v[0]);
 
-    // if velocity already received, output MIDI message
-    // TODO: if velocity not connected, use default?
+    // if velocity already received, output pitch-bend message
     unsigned char *velocity = (unsigned char *)msig_instance_value(dev->signals[1][channel],
                                                                    instance_id, 0);
+    int *cached = (int *)msig_get_instance_data(sig, instance_id);
     if (velocity) {
-        outmess[0] = channel + NOTE_ON;
-        outmess[1] = v[0];
-        outmess[2] = *velocity;
+        unsigned int pitchbend = 0;
+        if (cached)
+            pitchbend = (v[0] - (float)(*cached)) / 12.0f * 8152.0f + 8152;
+        else
+            pitchbend = (v[0] - 60.0f) / 12.0f * 8152.0f + 8152;
+        outmess[0] = channel + PITCH_WHEEL;
+        outmess[1] = (unsigned char)pitchbend;
+        outmess[2] = (unsigned char)pitchbend >> 8;
         dev->midiout->sendMessage(&outmess);
+    }
+    else {
+        // cache pitch value in user_data
+        if (cached)
+            *cached = *v;
+        else {
+            cached = (int *)malloc(sizeof(int));
+            *cached = *v;
+            msig_set_instance_data(sig, instance_id, cached);
+        }
     }
 }
 
 void velocity_handler(mapper_signal sig,
-                      int instance_id,
                       mapper_db_signal props,
-                      mapper_timetag_t *timetag,
-                      void *value)
+                      int instance_id,
+                      void *value,
+                      int count,
+                      mapper_timetag_t *timetag)
 {
     // noteon messages passed straight through with no instances
     midimap_device dev = (midimap_device)props->user_data;
@@ -97,54 +107,38 @@ void velocity_handler(mapper_signal sig,
         return;
     if (!dev->midiout)
         return;
-    char channel_str[4] = {0, 0, 0, 0};
-    int channel = 0;
-    if (props->name[8] != '.')
-        return;
 
-    // extract channel number from signal name
-    strncpy(channel_str, &props->name[9], 3);
-    channel_str[strchr(channel_str, '/') - channel_str] = 0;
-    channel = atoi(channel_str) - 1;
-    if (channel < 0 || channel > 15)
-        return;
+    int channel = get_channel_from_signame(props->name);
     int *v = (int *)value;
 
     // if pitch already received, output MIDI message
-    unsigned char pitch = (long int)msig_instance_get_data(dev->signals[0][channel],
-                                                           instance_id);
-    if (pitch) {
-        outmess[0] = channel + NOTE_ON;
-        outmess[1] = pitch;
-        outmess[2] = v[0];
-        dev->midiout->sendMessage(&outmess);
-    }
+    unsigned char pitch = (long int)msig_instance_value(dev->signals[0][channel],
+                                                        instance_id, 0);
+    outmess[0] = channel + NOTE_ON;
+    outmess[1] = pitch ? pitch : 60;
+    outmess[2] = v[0];
+    dev->midiout->sendMessage(&outmess);
 }
 
 void aftertouch_handler(mapper_signal sig,
-                        int instance_id,
                         mapper_db_signal props,
-                        mapper_timetag_t *timetag,
-                        void *value)
+                        int instance_id,
+                        void *value,
+                        int count,
+                        mapper_timetag_t *timetag)
 {
-    // aftertouch messages passed straight through with no instances
     midimap_device dev = (midimap_device)props->user_data;
     if (!dev || !value)
         return;
-    char channel_str[4] = {0, 0, 0, 0};
-    int channel = 0;
-    if (props->name[8] != '.')
-        return;
 
-    // extract channel number from signal name
-    strncpy(channel_str, &props->name[9], 3);
-    channel_str[strchr(channel_str, '/') - channel_str] = 0;
-    channel = atoi(channel_str) - 1;
-    if (channel < 0 || channel > 15)
+    int channel = get_channel_from_signame(props->name);
+
+    // check if note exists
+    if (!msig_instance_value(dev->signals[1][channel], instance_id, 0))
         return;
 
     // if note info exists, output MIDI message
-    unsigned char note = (long int)msig_instance_get_data(dev->signals[0][channel],
+    unsigned char note = (long int)msig_get_instance_data(dev->signals[0][channel],
                                                           instance_id);
     if (note) {
         int *v = (int *)value;
@@ -156,27 +150,18 @@ void aftertouch_handler(mapper_signal sig,
 }
 
 void control_change_handler(mapper_signal sig,
-                            int instance_id,
                             mapper_db_signal props,
-                            mapper_timetag_t *timetag,
-                            void *value)
+                            int instance_id,
+                            void *value,
+                            int count,
+                            mapper_timetag_t *timetag)
 {
     // control change messages passed straight through with no instances
     midimap_device dev = (midimap_device)props->user_data;
     if (!dev || !value)
         return;
-    char channel_str[4] = {0, 0, 0, 0};
-    int channel = 0;
-    if (props->name[8] != '.')
-        return;
 
-    // extract channel number from signal name
-    strncpy(channel_str, &props->name[9], 3);
-    channel_str[strchr(channel_str, '/') - channel_str] = 0;
-    channel = atoi(channel_str) - 1;
-    if (channel < 0 || channel > 15)
-        return;
-
+    int channel = get_channel_from_signame(props->name);
     int *v = (int *)value;
 
     outmess[0] = channel + CONTROL_CHANGE;
@@ -186,26 +171,18 @@ void control_change_handler(mapper_signal sig,
 }
 
 void program_change_handler(mapper_signal sig,
-                            int instance_id,
                             mapper_db_signal props,
-                            mapper_timetag_t *timetag,
-                            void *value)
+                            int instance_id,
+                            void *value,
+                            int count,
+                            mapper_timetag_t *timetag)
 {
     // program change messages passed straight through with no instances
     midimap_device dev = (midimap_device)props->user_data;
     if (!dev || !value)
         return;
-    char channel_str[4] = {0, 0, 0, 0};
-    int channel = 0;
-    if (props->name[8] != '.')
-        return;
 
-    // extract channel number from signal name
-    strncpy(channel_str, &props->name[9], 3);
-    channel_str[strchr(channel_str, '/') - channel_str] = 0;
-    channel = atoi(channel_str) - 1;
-    if (channel < 0 || channel > 15)
-        return;
+    int channel = get_channel_from_signame(props->name);
     int *v = (int *)value;
 
     outmess[0] = channel + PROGRAM_CHANGE;
@@ -214,26 +191,18 @@ void program_change_handler(mapper_signal sig,
 }
 
 void channel_pressure_handler(mapper_signal sig,
-                              int instance_id,
                               mapper_db_signal props,
-                              mapper_timetag_t *timetag,
-                              void *value)
+                              int instance_id,
+                              void *value,
+                              int count,
+                              mapper_timetag_t *timetag)
 {
     // channel pressure messages passed straight through with no instances
     midimap_device dev = (midimap_device)props->user_data;
     if (!dev || !value)
         return;
-    char channel_str[4] = {0, 0, 0, 0};
-    int channel = 0;
-    if (props->name[8] != '.')
-        return;
 
-    // extract channel number from signal name
-    strncpy(channel_str, &props->name[9], 3);
-    channel_str[strchr(channel_str, '/') - channel_str] = 0;
-    channel = atoi(channel_str) - 1;
-    if (channel < 0 || channel > 15)
-        return;
+    int channel = get_channel_from_signame(props->name);
     int *v = (int *)value;
 
     outmess[0] = channel + CHANNEL_PRESSURE;
@@ -241,39 +210,10 @@ void channel_pressure_handler(mapper_signal sig,
     dev->midiout->sendMessage(&outmess);
 }
 
-void pitch_wheel_handler(mapper_signal sig,
-                         int instance_id,
-                         mapper_db_signal props,
-                         mapper_timetag_t *timetag,
-                         void *value)
-{
-    // pitch wheel messages passed straight through with no instances
-    midimap_device dev = (midimap_device)props->user_data;
-    if (!dev || !value)
-        return;
-    char channel_str[4] = {0, 0, 0, 0};
-    int channel = 0;
-    if (props->name[8] != '.')
-        return;
-
-    // extract channel number from signal name
-    strncpy(channel_str, &props->name[9], 3);
-    channel_str[strchr(channel_str, '/') - channel_str] = 0;
-    channel = atoi(channel_str) - 1;
-    if (channel < 0 || channel > 15)
-        return;
-    int *v = (int *)value;
-
-    outmess[0] = channel + PITCH_WHEEL;
-    outmess[1] = v[0];
-    outmess[2] = v[0] >> 8;
-    dev->midiout->sendMessage(&outmess);
-}
-
 void add_input_signals(midimap_device dev)
 {
     char signame[64];
-    int i, min = 0, max7bit = 127, max14bit = 16383;
+    int i, min = 0, max7bit = 127;
     for (i = 1; i < 17; i++) {
         snprintf(signame, 64, "/channel.%i/note/pitch", i);
         dev->signals[0][i] = mdev_add_input(dev->mapper_dev, signame, 1, 'i', "midinote",
@@ -305,11 +245,6 @@ void add_input_signals(midimap_device dev)
         dev->signals[5][i] = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
                                             &min, &max7bit, channel_pressure_handler, dev);
         msig_reserve_instances(dev->signals[5][i], INSTANCES - 1);
-
-        snprintf(signame, 64, "/channel.%i/pitch_wheel", i);
-        dev->signals[6][i] = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                            &min, &max14bit, pitch_wheel_handler, dev);
-        msig_reserve_instances(dev->signals[6][i], INSTANCES - 1);
     }
 }
 
@@ -317,7 +252,7 @@ void add_input_signals(midimap_device dev)
 void add_output_signals(midimap_device dev)
 {
     char signame[64];
-    int i, min = 0, max7bit = 127, max14bit = 16383;
+    int i, min = 0, max7bit = 127;
     // TODO: Need to declare these signals for each MIDI channel
     for (i = 1; i < 17; i++) {
         snprintf(signame, 64, "/channel.%i/note/pitch", i);
@@ -350,11 +285,6 @@ void add_output_signals(midimap_device dev)
         dev->signals[5][i] = mdev_add_output(dev->mapper_dev, signame, 1,
                                              'i', 0, &min, &max7bit);
         msig_reserve_instances(dev->signals[5][i], INSTANCES - 1);
-
-        snprintf(signame, 64, "/channel.%i/pitch_wheel", i);
-        dev->signals[6][i] = mdev_add_output(dev->mapper_dev, signame, 1,
-                                             'i', 0, &min, &max14bit);
-        msig_reserve_instances(dev->signals[6][i], INSTANCES - 1);
     }
 }
 
@@ -487,60 +417,63 @@ void parse_midi(midimap_device dev, std::vector<unsigned char> message)
     int channel = ((int)message[0] - 0x80) % 0x0F;
     int data[2] = {(int)message[1], (int)message[2]};
 
+    mdev_timetag_now(dev->mapper_dev, &tt);
+    mdev_start_queue(dev->mapper_dev, tt);
     switch (msg_type) {
         case 0:
             // note-off message
             msig_release_instance(dev->signals[0][channel],
-                                  (int)message[1]);
+                                  data[0], tt);
             msig_release_instance(dev->signals[1][channel],
-                                  (int)message[1]);
+                                  data[0], tt);
             // TODO: release aftertouch instance?
             break;
         case 1:
             // note-on message
             if (message[2]) {
-                printf("noteon!\n");
                 msig_update_instance(dev->signals[0][channel],
-                                     (int)message[1],
-                                     (void *)&message[1]);
+                                     data[0],
+                                     &data[0], 1, tt);
                 msig_update_instance(dev->signals[1][channel],
-                                     (int)message[1],
-                                     (void *)&message[2]);
+                                     data[0],
+                                     &data[1], 1, tt);
             }
             else {
-                printf("noteoff!\n");
                 msig_release_instance(dev->signals[0][channel],
-                                      (int)message[1]);
+                                      data[0], tt);
                 msig_release_instance(dev->signals[1][channel],
-                                      (int)message[1]);
+                                      data[0], tt);
             }
             break;
         case 2:
             // aftertouch
             msig_update_instance(dev->signals[2][channel],
-                                 (int)message[1],
-                                 (void *)&message[2]);
+                                 data[0],
+                                 &data[1], 1, tt);
             break;
         case 3:
             // control change
-            msig_update(dev->signals[3][channel], (void *)data);
+            msig_update(dev->signals[3][channel], (void *)data, 1, tt);
             break;
         case 4:
             // program change
-            msig_update(dev->signals[4][channel], (void *)data);
+            msig_update(dev->signals[4][channel], (void *)data, 1, tt);
             break;
         case 5:
             // channel pressure
-            msig_update(dev->signals[5][channel], (void *)data);
+            msig_update(dev->signals[5][channel], (void *)data, 1, tt);
             break;
         case 6:
+        {
             // pitch wheel
-            msig_update(dev->signals[6][channel],
-                        (void *)(data[1] + (data[2] << 8)));
+            int value = data[0] + (data[1] << 8);
+            msig_update(dev->signals[6][channel], &value, 1, tt);
             break;
+        }
         default:
             break;
     }
+    mdev_send_queue(dev->mapper_dev, tt);
 }
 
 void cleanup_device(midimap_device dev)
