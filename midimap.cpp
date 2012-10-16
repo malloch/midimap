@@ -403,7 +403,6 @@ void scan_midi_devices()
         std::cout << "There are " << nPorts << " MIDI input sources available.\n";
 
         for (unsigned int i=0; i<nPorts; i++) {
-            printf("foo\n");
             std::string portName = midiin->getPortName(i);
             std::cout << "  Input Port #" << i+1 << ": " << portName << '\n';
             // check if record already exists
