@@ -79,10 +79,15 @@ void velocity_handler(mapper_signal sig, mapper_db_signal props,
     int *v = (int *)value;
 
     // output MIDI NOTEON message
-    unsigned char note = (long int)msig_instance_value(chan->pitch,
-                                                       instance_id, 0);
+
+    /* Get pitch value for this instance. This might seem a bit weird since
+     * the pitch instance may have been remotely released already implying
+     * that it has no value, however libmapper does not (currently)
+     * overwrite the last value of a remotely released instance. */
+    int *note = (int *)msig_instance_value(chan->pitch, instance_id, 0);
+
     outmess[0] = chan->number + NOTE_ON;
-    outmess[1] = note ?: 60;
+    outmess[1] = note ? (unsigned char)(*note) : 60;
     outmess[2] = value ? v[0] : 0;
     chan->device->midiout->sendMessage(&outmess);
 
@@ -109,11 +114,11 @@ void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
         return;
 
     // output MIDI AFTERTOUCH message
-    unsigned char note = (long int)msig_instance_value(chan->pitch,
-                                                       instance_id, 0);
+    int *note = (int *)msig_instance_value(chan->pitch, instance_id, 0);
+
     int *v = (int *)value;
     outmess[0] = chan->number + AFTERTOUCH;
-    outmess[1] = note ?: 60;
+    outmess[1] = note ? (unsigned char)(*note) : 60;
     outmess[2] = v[0];
     chan->device->midiout->sendMessage(&outmess);
 }
