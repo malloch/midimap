@@ -83,8 +83,13 @@ void velocity_handler(mapper_signal sig, mapper_db_signal props,
                                                        instance_id, 0);
     outmess[0] = chan->number + NOTE_ON;
     outmess[1] = note ?: 60;
-    outmess[2] = v[0];
+    outmess[2] = value ? v[0] : 0;
     chan->device->midiout->sendMessage(&outmess);
+
+    if (!value) {
+        msig_release_instance(sig, instance_id, MAPPER_NOW);
+        msig_release_instance(chan->pitch, instance_id, MAPPER_NOW);
+    }
 }
 
 void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
@@ -184,49 +189,50 @@ void add_input_signals(midimap_device dev)
     char signame[64];
     int i, min = 0, max7bit = 127, max14bit = 16383;
     for (i = 0; i < 16; i++) {
-        dev->channel[i] = (midimap_channel) malloc(sizeof(struct _midimap_channel));
-        dev->channel[i]->number = i;
-        dev->channel[i]->device = dev;
+        midimap_channel chan = (midimap_channel) malloc(sizeof(struct _midimap_channel));
+        chan->number = i;
+        chan->device = dev;
+        dev->channel[i] = chan;
 
         snprintf(signame, 64, "/channel.%i/note/pitch", i+1);
         dev->channel[i]->pitch = mdev_add_input(dev->mapper_dev, signame, 1, 'i', "midinote",
-                                                &min, &max7bit, pitch_handler, dev);
+                                                &min, &max7bit, pitch_handler, chan);
         msig_reserve_instances(dev->channel[i]->pitch, INSTANCES-1);
 
         snprintf(signame, 64, "/channel.%i/note/velocity", i+1);
         dev->channel[i]->velocity = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                   &min, &max7bit, velocity_handler, dev);
+                                                   &min, &max7bit, velocity_handler, chan);
         msig_reserve_instances(dev->channel[i]->velocity, INSTANCES-1);
 
         snprintf(signame, 64, "/channel.%i/note/aftertouch", i+1);
         dev->channel[i]->aftertouch = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                     &min, &max7bit, aftertouch_handler, dev);
+                                                     &min, &max7bit, aftertouch_handler, chan);
         msig_reserve_instances(dev->channel[i]->aftertouch, INSTANCES-1);
 /*
         snprintf(signame, 64, "/channel.%i/note/pressure", i+1);
         dev->channel[i]->poly_pressure = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                        &min, &max7bit, poly_pressure_handler, dev);
+                                                        &min, &max7bit, poly_pressure_handler, chan);
         msig_reserve_instances(dev->channel[i]->poly_pressure, INSTANCES-1);
  */
         snprintf(signame, 64, "/channel.%i/pitch_wheel", i+1);
         dev->channel[i]->pitch_wheel = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                      &min, &max14bit, pitch_wheel_handler, dev);
+                                                      &min, &max14bit, pitch_wheel_handler, chan);
         msig_reserve_instances(dev->channel[i]->pitch_wheel, INSTANCES-1);
 
         // TODO: declare meaningful control change signals
         snprintf(signame, 64, "/channel.%i/control_change", i+1);
         dev->channel[i]->control_change = mdev_add_input(dev->mapper_dev, signame, 2, 'i', "midi",
-                                                         &min, &max7bit, control_change_handler, dev);
+                                                         &min, &max7bit, control_change_handler, chan);
         msig_reserve_instances(dev->channel[i]->control_change, INSTANCES-1);
 
         snprintf(signame, 64, "/channel.%i/program_change", i+1);
         dev->channel[i]->program_change = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                         &min, &max7bit, program_change_handler, dev);
+                                                         &min, &max7bit, program_change_handler, chan);
         msig_reserve_instances(dev->channel[i]->program_change, INSTANCES-1);
 
         snprintf(signame, 64, "/channel.%i/channel_pressure", i+1);
         dev->channel[i]->channel_pressure = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                           &min, &max7bit, channel_pressure_handler, dev);
+                                                           &min, &max7bit, channel_pressure_handler, chan);
         msig_reserve_instances(dev->channel[i]->channel_pressure, INSTANCES-1);
     }
 }
