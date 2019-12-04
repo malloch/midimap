@@ -1,6 +1,7 @@
 
 #include <iostream>
 #include <cstdlib>
+#include <unistd.h>
 #include "RtMidi.h"
 #include "mapper/mapper.h"
 
@@ -47,33 +48,31 @@ std::vector<unsigned char> outmess (3, 0);
 
 void cleanup_device(midimap_device dev);
 
-void pitch_handler(mapper_signal sig, mapper_db_signal props,
-                   int instance_id, void *value, int count,
-                   mapper_timetag_t *timetag)
+void pitch_handler(mapper_signal sig, mapper_id instance, const void *value,
+                   int count, mapper_timetag_t *timetag)
 {
-    midimap_channel chan = (midimap_channel)props->user_data;
+    midimap_channel chan = (midimap_channel)mapper_signal_user_data(sig);
     if (!chan || !chan->device || !chan->device->midiout)
         return;
 
     if (value) {
         // make sure pitch instance is matched to velocity and aftertouch instances
-        msig_match_instances(sig, chan->velocity, instance_id);
-        msig_match_instances(sig, chan->aftertouch, instance_id);
+        mapper_signal_instance_activate(chan->velocity, instance);
+        mapper_signal_instance_activate(chan->aftertouch, instance);
     }
 }
 
-void velocity_handler(mapper_signal sig, mapper_db_signal props,
-                      int instance_id, void *value, int count,
-                      mapper_timetag_t *timetag)
+void velocity_handler(mapper_signal sig, mapper_id instance, const void *value,
+                      int count, mapper_timetag_t *timetag)
 {
-    midimap_channel chan = (midimap_channel)props->user_data;
+    midimap_channel chan = (midimap_channel)mapper_signal_user_data(sig);
     if (!chan || !chan->device || !chan->device->midiout)
         return;
 
     if (value) {
         // make sure velocity instance is matched to pitch and aftertouch instances
-        msig_match_instances(sig, chan->pitch, instance_id);
-        msig_match_instances(sig, chan->aftertouch, instance_id);
+        mapper_signal_instance_activate(chan->pitch, instance);
+        mapper_signal_instance_activate(chan->aftertouch, instance);
     }
 
     int *v = (int *)value;
@@ -84,7 +83,7 @@ void velocity_handler(mapper_signal sig, mapper_db_signal props,
      * the pitch instance may have been remotely released already implying
      * that it has no value, however libmapper does not (currently)
      * overwrite the last value of a remotely released instance. */
-    int *note = (int *)msig_instance_value(chan->pitch, instance_id, 0);
+    int *note = (int *)mapper_signal_instance_value(chan->pitch, instance, 0);
 
     outmess[0] = chan->number + NOTE_ON;
     outmess[1] = note ? (unsigned char)(*note) : 60;
@@ -92,29 +91,28 @@ void velocity_handler(mapper_signal sig, mapper_db_signal props,
     chan->device->midiout->sendMessage(&outmess);
 
     if (!value) {
-        msig_release_instance(sig, instance_id, MAPPER_NOW);
-        msig_release_instance(chan->pitch, instance_id, MAPPER_NOW);
+        mapper_signal_instance_release(sig, instance, MAPPER_NOW);
+        mapper_signal_instance_release(chan->pitch, instance, MAPPER_NOW);
     }
 }
 
-void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
-                        int instance_id, void *value, int count,
-                        mapper_timetag_t *timetag)
+void aftertouch_handler(mapper_signal sig, mapper_id instance, const void *value,
+                        int count, mapper_timetag_t *timetag)
 {
-    midimap_channel chan = (midimap_channel)props->user_data;
+    midimap_channel chan = (midimap_channel)mapper_signal_user_data(sig);
     if (!value || !chan || !chan->device || !chan->device->midiout)
         return;
 
     // make sure aftertouch instance is matched to pitch and velocity instances
-    msig_match_instances(sig, chan->pitch, instance_id);
-    msig_match_instances(sig, chan->velocity, instance_id);
+    mapper_signal_instance_activate(chan->pitch, instance);
+    mapper_signal_instance_activate(chan->velocity, instance);
 
     // check if note exists
-    if (!msig_instance_value(chan->velocity, instance_id, 0))
+    if (!mapper_signal_instance_value(chan->velocity, instance, 0))
         return;
 
     // output MIDI AFTERTOUCH message
-    int *note = (int *)msig_instance_value(chan->pitch, instance_id, 0);
+    int *note = (int *)mapper_signal_instance_value(chan->pitch, instance, 0);
 
     int *v = (int *)value;
     outmess[0] = chan->number + AFTERTOUCH;
@@ -123,12 +121,11 @@ void aftertouch_handler(mapper_signal sig, mapper_db_signal props,
     chan->device->midiout->sendMessage(&outmess);
 }
 
-void pitch_wheel_handler(mapper_signal sig, mapper_db_signal props,
-                         int instance_id, void *value, int count,
-                         mapper_timetag_t *timetag)
+void pitch_wheel_handler(mapper_signal sig, mapper_id instance, const void *value,
+                         int count, mapper_timetag_t *timetag)
 {
     // pitch wheel messages passed straight through with no instances
-    midimap_channel chan = (midimap_channel)props->user_data;
+    midimap_channel chan = (midimap_channel)mapper_signal_user_data(sig);
     if (!value || !chan || !chan->device || !chan->device->midiout)
         return;
 
@@ -140,12 +137,11 @@ void pitch_wheel_handler(mapper_signal sig, mapper_db_signal props,
     chan->device->midiout->sendMessage(&outmess);
 }
 
-void control_change_handler(mapper_signal sig, mapper_db_signal props,
-                            int instance_id, void *value, int count,
-                            mapper_timetag_t *timetag)
+void control_change_handler(mapper_signal sig, mapper_id instance, const void *value,
+                            int count, mapper_timetag_t *timetag)
 {
     // control change messages passed straight through with no instances
-    midimap_channel chan = (midimap_channel)props->user_data;
+    midimap_channel chan = (midimap_channel)mapper_signal_user_data(sig);
     if (!value || !chan || !chan->device || !chan->device->midiout)
         return;
 
@@ -157,12 +153,11 @@ void control_change_handler(mapper_signal sig, mapper_db_signal props,
     chan->device->midiout->sendMessage(&outmess);
 }
 
-void program_change_handler(mapper_signal sig, mapper_db_signal props,
-                            int instance_id, void *value, int count,
-                            mapper_timetag_t *timetag)
+void program_change_handler(mapper_signal sig, mapper_id instance, const void *value,
+                            int count, mapper_timetag_t *timetag)
 {
     // program change messages passed straight through with no instances
-    midimap_channel chan = (midimap_channel)props->user_data;
+    midimap_channel chan = (midimap_channel)mapper_signal_user_data(sig);
     if (!value || !chan || !chan->device || !chan->device->midiout)
         return;
 
@@ -173,12 +168,11 @@ void program_change_handler(mapper_signal sig, mapper_db_signal props,
     chan->device->midiout->sendMessage(&outmess);
 }
 
-void channel_pressure_handler(mapper_signal sig, mapper_db_signal props,
-                              int instance_id, void *value, int count,
-                              mapper_timetag_t *timetag)
+void channel_pressure_handler(mapper_signal sig, mapper_id instance, const void *value,
+                              int count, mapper_timetag_t *timetag)
 {
     // channel pressure messages passed straight through with no instances
-    midimap_channel chan = (midimap_channel)props->user_data;
+    midimap_channel chan = (midimap_channel)mapper_signal_user_data(sig);
     if (!value || !chan || !chan->device || !chan->device->midiout)
         return;
 
@@ -189,8 +183,33 @@ void channel_pressure_handler(mapper_signal sig, mapper_db_signal props,
     chan->device->midiout->sendMessage(&outmess);
 }
 
+void event_handler(mapper_signal sig, mapper_id instance,
+                   mapper_instance_event event, mapper_timetag_t *timetag)
+{
+    if (!(event & MAPPER_INSTANCE_OVERFLOW))
+        return;
+
+    midimap_channel chan = (midimap_channel)mapper_signal_user_data(sig);
+
+    // steal oldest instance
+    mapper_id id = mapper_signal_oldest_active_instance(sig);
+
+    // maybe release peer signals
+    if (   sig == chan->pitch
+        || sig == chan->velocity
+        || sig == chan->aftertouch) {
+        mapper_signal_instance_release(chan->pitch, id, MAPPER_NOW);
+        mapper_signal_instance_release(chan->velocity, id, MAPPER_NOW);
+        mapper_signal_instance_release(chan->aftertouch, id, MAPPER_NOW);
+    }
+    else {
+        mapper_signal_instance_release(sig, id, MAPPER_NOW);
+    }
+}
+
 void add_input_signals(midimap_device dev)
 {
+    mapper_signal sig;
     char signame[64];
     int i, min = 0, max7bit = 127, max14bit = 16383;
     for (i = 0; i < 16; i++) {
@@ -200,98 +219,138 @@ void add_input_signals(midimap_device dev)
         dev->channel[i] = chan;
 
         snprintf(signame, 64, "/channel.%i/note/pitch", i+1);
-        dev->channel[i]->pitch = mdev_add_input(dev->mapper_dev, signame, 1, 'i', "midinote",
-                                                &min, &max7bit, pitch_handler, chan);
-        msig_reserve_instances(dev->channel[i]->pitch, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_INCOMING,
+                                       INSTANCES, signame, 1, 'i', "midinote",
+                                       &min, &max7bit, pitch_handler, chan);
+        mapper_signal_set_instance_stealing_mode(sig, MAPPER_STEAL_OLDEST);
+        dev->channel[i]->pitch = sig;
 
         snprintf(signame, 64, "/channel.%i/note/velocity", i+1);
-        dev->channel[i]->velocity = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                   &min, &max7bit, velocity_handler, chan);
-        msig_reserve_instances(dev->channel[i]->velocity, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_INCOMING,
+                                       INSTANCES, signame, 1, 'i', 0, &min,
+                                       &max7bit, velocity_handler, chan);
+        mapper_signal_set_instance_stealing_mode(sig, MAPPER_STEAL_OLDEST);
+        dev->channel[i]->velocity = sig;
 
         snprintf(signame, 64, "/channel.%i/note/aftertouch", i+1);
-        dev->channel[i]->aftertouch = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                     &min, &max7bit, aftertouch_handler, chan);
-        msig_reserve_instances(dev->channel[i]->aftertouch, INSTANCES-1);
-/*
-        snprintf(signame, 64, "/channel.%i/note/pressure", i+1);
-        dev->channel[i]->poly_pressure = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                        &min, &max7bit, poly_pressure_handler, chan);
-        msig_reserve_instances(dev->channel[i]->poly_pressure, INSTANCES-1);
- */
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_INCOMING,
+                                       INSTANCES, signame, 1, 'i', 0, &min,
+                                       &max7bit, aftertouch_handler, chan);
+        mapper_signal_set_instance_stealing_mode(sig, MAPPER_STEAL_OLDEST);
+        dev->channel[i]->aftertouch = sig;
+
+//        snprintf(signame, 64, "/channel.%i/note/pressure", i+1);
+//        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_INCOMING,
+//                                       INSTANCES, signame, 1, 'i', 0, &min,
+//                                       &max7bit, poly_pressure_handler, chan);
+//        mapper_signal_set_instance_stealing_mode(sig, MAPPER_STEAL_OLDEST);
+//        dev->channel[i]->poly_pressure = sig;
+
         snprintf(signame, 64, "/channel.%i/pitch_wheel", i+1);
-        dev->channel[i]->pitch_wheel = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                      &min, &max14bit, pitch_wheel_handler, chan);
-        msig_reserve_instances(dev->channel[i]->pitch_wheel, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_INCOMING,
+                                       INSTANCES, signame, 1, 'i', 0, &min,
+                                       &max14bit, pitch_wheel_handler, chan);
+        mapper_signal_set_instance_stealing_mode(sig, MAPPER_STEAL_OLDEST);
+        dev->channel[i]->pitch_wheel = sig;
 
         // TODO: declare meaningful control change signals
         snprintf(signame, 64, "/channel.%i/control_change", i+1);
-        dev->channel[i]->control_change = mdev_add_input(dev->mapper_dev, signame, 2, 'i', "midi",
-                                                         &min, &max7bit, control_change_handler, chan);
-        msig_reserve_instances(dev->channel[i]->control_change, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_INCOMING,
+                                       INSTANCES, signame, 2, 'i', "midi", &min,
+                                       &max7bit, control_change_handler, chan);
+        mapper_signal_set_instance_stealing_mode(sig, MAPPER_STEAL_OLDEST);
+        dev->channel[i]->control_change = sig;
 
         snprintf(signame, 64, "/channel.%i/program_change", i+1);
-        dev->channel[i]->program_change = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                         &min, &max7bit, program_change_handler, chan);
-        msig_reserve_instances(dev->channel[i]->program_change, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_INCOMING,
+                                       INSTANCES, signame, 1, 'i', 0, &min,
+                                       &max7bit, program_change_handler, chan);
+        mapper_signal_set_instance_stealing_mode(sig, MAPPER_STEAL_OLDEST);
+        dev->channel[i]->program_change = sig;
 
         snprintf(signame, 64, "/channel.%i/channel_pressure", i+1);
-        dev->channel[i]->channel_pressure = mdev_add_input(dev->mapper_dev, signame, 1, 'i', 0,
-                                                           &min, &max7bit, channel_pressure_handler, chan);
-        msig_reserve_instances(dev->channel[i]->channel_pressure, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_INCOMING,
+                                       INSTANCES, signame, 1, 'i', 0, &min,
+                                       &max7bit, channel_pressure_handler, chan);
+        mapper_signal_set_instance_stealing_mode(sig, MAPPER_STEAL_OLDEST);
+        dev->channel[i]->channel_pressure = sig;
     }
 }
 
 // Declare output signals
 void add_output_signals(midimap_device dev)
 {
+    mapper_signal sig;
     char signame[64];
     int i, min = 0, max7bit = 127, max14bit = 16383;
     for (i = 0; i < 16; i++) {
-        dev->channel[i] = (midimap_channel) malloc(sizeof(struct _midimap_channel));
-        dev->channel[i]->number = i;
-        dev->channel[i]->device = dev;
+        midimap_channel chan = (midimap_channel) malloc(sizeof(struct _midimap_channel));
+        chan->number = i;
+        chan->device = dev;
+        dev->channel[i] = chan;
 
         snprintf(signame, 64, "/channel.%i/note/pitch", i+1);
-        dev->channel[i]->pitch = mdev_add_output(dev->mapper_dev, signame, 1,
-                                                 'i', "midinote", &min, &max7bit);
-        msig_reserve_instances(dev->channel[i]->pitch, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_OUTGOING,
+                                       INSTANCES, signame, 1, 'i', "midinote",
+                                       &min, &max7bit, 0, chan);
+        mapper_signal_set_instance_event_callback(sig, event_handler,
+                                                  MAPPER_INSTANCE_OVERFLOW);
+        dev->channel[i]->pitch = sig;
 
         snprintf(signame, 64, "/channel.%i/note/velocity", i+1);
-        dev->channel[i]->velocity = mdev_add_output(dev->mapper_dev, signame, 1,
-                                                    'i', 0, &min, &max7bit);
-        msig_reserve_instances(dev->channel[i]->velocity, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_OUTGOING,
+                                       INSTANCES, signame, 1, 'i', 0, &min,
+                                       &max7bit, 0, chan);
+        mapper_signal_set_instance_event_callback(sig, event_handler,
+                                                  MAPPER_INSTANCE_OVERFLOW);
+        dev->channel[i]->velocity = sig;
 
         snprintf(signame, 64, "/channel.%i/note/aftertouch", i+1);
-        dev->channel[i]->aftertouch = mdev_add_output(dev->mapper_dev, signame, 1,
-                                                      'i', 0, &min, &max7bit);
-        msig_reserve_instances(dev->channel[i]->aftertouch, INSTANCES-1);
-        /*
-         snprintf(signame, 64, "/channel.%i/note/pressure", i+1);
-         dev->channel[i]->poly_pressure = mdev_add_output(dev->mapper_dev, signame, 1,
-                                                          'i', 0, &min, &max7bit);
-         msig_reserve_instances(dev->channel[i]->poly_pressure, INSTANCES-1);
-         */
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_OUTGOING,
+                                       INSTANCES, signame, 1, 'i', 0, &min,
+                                       &max7bit, 0, chan);
+        mapper_signal_set_instance_event_callback(sig, event_handler,
+                                                  MAPPER_INSTANCE_OVERFLOW);
+        dev->channel[i]->aftertouch = sig;
+
+//        snprintf(signame, 64, "/channel.%i/note/pressure", i+1);
+//        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_OUTGOING,
+//                                       INSTANCES, signame, 1, 'i', 0, &min,
+//                                       &max7bit, 0, chan);
+//        dev->channel[i]->poly_pressure = sig;
+
         snprintf(signame, 64, "/channel.%i/pitch_wheel", i+1);
-        dev->channel[i]->pitch_wheel = mdev_add_output(dev->mapper_dev, signame, 1,
-                                                       'i', 0, &min, &max14bit);
-        msig_reserve_instances(dev->channel[i]->pitch_wheel, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_OUTGOING,
+                                       INSTANCES, signame, 1, 'i', 0, &min,
+                                       &max14bit, 0, chan);
+        mapper_signal_set_instance_event_callback(sig, event_handler,
+                                                  MAPPER_INSTANCE_OVERFLOW);
+        dev->channel[i]->pitch_wheel = sig;
 
         // TODO: declare meaningful control change signals
         snprintf(signame, 64, "/channel.%i/control_change", i+1);
-        dev->channel[i]->control_change = mdev_add_output(dev->mapper_dev, signame, 2,
-                                                          'i', "midi", &min, &max7bit);
-        msig_reserve_instances(dev->channel[i]->control_change, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_OUTGOING,
+                                       INSTANCES, signame, 2, 'i', "midi",
+                                       &min, &max7bit, 0, chan);
+        mapper_signal_set_instance_event_callback(sig, event_handler,
+                                                  MAPPER_INSTANCE_OVERFLOW);
+        dev->channel[i]->control_change = sig;
 
         snprintf(signame, 64, "/channel.%i/program_change", i+1);
-        dev->channel[i]->program_change = mdev_add_output(dev->mapper_dev, signame, 1,
-                                                          'i', 0, &min, &max7bit);
-        msig_reserve_instances(dev->channel[i]->program_change, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_OUTGOING,
+                                       INSTANCES, signame, 1, 'i', 0, &min,
+                                       &max7bit, 0, chan);
+        mapper_signal_set_instance_event_callback(sig, event_handler,
+                                                  MAPPER_INSTANCE_OVERFLOW);
+        dev->channel[i]->program_change = sig;
 
         snprintf(signame, 64, "/channel.%i/channel_pressure", i+1);
-        dev->channel[i]->channel_pressure = mdev_add_output(dev->mapper_dev, signame, 1,
-                                                            'i', 0, &min, &max7bit);
-        msig_reserve_instances(dev->channel[i]->channel_pressure, INSTANCES-1);
+        sig = mapper_device_add_signal(dev->mapper_dev, MAPPER_DIR_OUTGOING,
+                                       INSTANCES, signame, 1, 'i', 0, &min,
+                                       &max7bit, 0, chan);
+        mapper_signal_set_instance_event_callback(sig, event_handler,
+                                                  MAPPER_INSTANCE_OVERFLOW);
+        dev->channel[i]->channel_pressure = sig;
     }
 }
 
@@ -301,63 +360,63 @@ void parse_midi(double deltatime, std::vector<unsigned char> *message, void *use
         return;
 
     midimap_device dev = (midimap_device)user_data;
-    if (!mdev_ready(dev->mapper_dev))
+    if (!mapper_device_ready(dev->mapper_dev))
         return;
 
     int msg_type = ((int)message->at(0) - 0x80) / 0x0F;
     int chan = ((int)message->at(0) - 0x80) % 0x0F - 1;
     int data[2] = {(int)message->at(1), (int)message->at(2)};
 
-    mdev_now(dev->mapper_dev, &tt);
-    mdev_start_queue(dev->mapper_dev, tt);
+    mapper_timetag_now(&tt);
+    mapper_device_start_queue(dev->mapper_dev, tt);
     switch (msg_type) {
         case 0: // note-off message
-            msig_release_instance(dev->channel[chan]->pitch,
-                                  data[0], tt);
-            msig_release_instance(dev->channel[chan]->velocity,
-                                  data[0], tt);
-            msig_release_instance(dev->channel[chan]->aftertouch,
-                                  data[0], tt);
+            mapper_signal_instance_release(dev->channel[chan]->pitch,
+                                           data[0], tt);
+            mapper_signal_instance_release(dev->channel[chan]->velocity,
+                                           data[0], tt);
+            mapper_signal_instance_release(dev->channel[chan]->aftertouch,
+                                           data[0], tt);
             break;
         case 1: // note-on message
             if (data[1]) {
-                msig_update_instance(dev->channel[chan]->pitch,
-                                     data[0], &data[0], 1, tt);
-                msig_update_instance(dev->channel[chan]->velocity,
-                                     data[0], &data[1], 1, tt);
+                mapper_signal_instance_update(dev->channel[chan]->pitch,
+                                              data[0], &data[0], 1, tt);
+                mapper_signal_instance_update(dev->channel[chan]->velocity,
+                                              data[0], &data[1], 1, tt);
             }
             else {
-                msig_release_instance(dev->channel[chan]->pitch,
-                                      data[0], tt);
-                msig_release_instance(dev->channel[chan]->velocity,
-                                      data[0], tt);
-                msig_release_instance(dev->channel[chan]->aftertouch,
-                                      data[0], tt);
+                mapper_signal_instance_release(dev->channel[chan]->pitch,
+                                               data[0], tt);
+                mapper_signal_instance_release(dev->channel[chan]->velocity,
+                                               data[0], tt);
+                mapper_signal_instance_release(dev->channel[chan]->aftertouch,
+                                               data[0], tt);
             }
             break;
         case 2: // aftertouch message
-            msig_update_instance(dev->channel[chan]->aftertouch,
-                                 data[0], &data[1], 1, tt);
+            mapper_signal_instance_update(dev->channel[chan]->aftertouch,
+                                          data[0], &data[1], 1, tt);
             break;
         case 3: // control change message
-            msig_update(dev->channel[chan]->control_change, (void *)data, 1, tt);
+            mapper_signal_update(dev->channel[chan]->control_change, (void *)data, 1, tt);
             break;
         case 4: // program change message
-            msig_update(dev->channel[chan]->program_change, (void *)data, 1, tt);
+            mapper_signal_update(dev->channel[chan]->program_change, (void *)data, 1, tt);
             break;
         case 5: // channel pressure message
-            msig_update(dev->channel[chan]->channel_pressure, (void *)data, 1, tt);
+            mapper_signal_update(dev->channel[chan]->channel_pressure, (void *)data, 1, tt);
             break;
         case 6: // pitch wheel message
         {
             int value = data[0] + (data[1] << 8);
-            msig_update(dev->channel[chan]->pitch_wheel, &value, 1, tt);
+            mapper_signal_update(dev->channel[chan]->pitch_wheel, &value, 1, tt);
             break;
         }
         default:
             break;
     }
-    mdev_send_queue(dev->mapper_dev, tt);
+    mapper_device_send_queue(dev->mapper_dev, tt);
 }
 
 // Check if any MIDI ports are available on the system
@@ -398,7 +457,7 @@ void scan_midi_devices()
                     devname[k] = 0;
                 }
             }
-            dev->mapper_dev = mdev_new(devname, 0, 0);
+            dev->mapper_dev = mapper_device_new(devname, 0, 0);
             dev->midiin = new RtMidiIn();
             dev->midiin->openPort(i);
             dev->midiin->setCallback(&parse_midi, dev);
@@ -443,7 +502,7 @@ void scan_midi_devices()
                     devname[k] = 0;
                 }
             }
-            dev->mapper_dev = mdev_new(devname, 0, 0);
+            dev->mapper_dev = mapper_device_new(devname, 0, 0);
             dev->midiin = 0;
             dev->midiout = new RtMidiOut();
             dev->midiout->openPort(i);
@@ -490,7 +549,7 @@ void cleanup_device(midimap_device dev)
         free(dev->name);
     }
     if (dev->mapper_dev) {
-        mdev_free(dev->mapper_dev);
+        mapper_device_free(dev->mapper_dev);
     }
     if (dev->midiin) {
         delete dev->midiin;
@@ -530,13 +589,13 @@ void loop()
         // poll libmapper outputs
         temp = outputs;
         while (temp) {
-            mdev_poll(temp->mapper_dev, 0);
+            mapper_device_poll(temp->mapper_dev, 0);
             temp = temp->next;
         }
         // poll libmapper inputs
         temp = inputs;
         while (temp) {
-            mdev_poll(temp->mapper_dev, 0);
+            mapper_device_poll(temp->mapper_dev, 0);
             temp = temp->next;
         }
         usleep(10 * 1000);

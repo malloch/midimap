@@ -13,10 +13,10 @@ OBJECTS	=	RtMidi.o
 CC       = @CXX@
 DEFS     = @CPPFLAGS@
 CFLAGS   = @CXXFLAGS@
-CFLAGS  += $(shell pkg-config --cflags libmapper-0)
+CFLAGS  += $(shell pkg-config --cflags libmapper)
 CFLAGS  += -I$(INCLUDE)
 LIBRARY  = -framework CoreMIDI -framework CoreFoundation -framework CoreAudio
-LIBRARY += $(shell pkg-config --libs libmapper-0)
+LIBRARY += $(shell pkg-config --libs libmapper)
 
 %.o : $(SRC_PATH)/%.cpp
 	$(CC) $(CFLAGS) $(DEFS) -c $(<) -o $(OBJECT_PATH)/$@
